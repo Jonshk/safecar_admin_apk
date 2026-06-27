@@ -1,0 +1,40 @@
+name: safecar_admin
+description: Safe Car Admin — Panel del dueño del taller
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # HTTP
+  http: ^1.2.2
+  # Firebase push
+  firebase_core: ^3.4.0
+  firebase_messaging: ^15.1.0
+  flutter_local_notifications: ^17.2.2
+  # UI
+  google_fonts: ^6.2.1
+  intl: ^0.19.0
+  cached_network_image: ^3.3.1
+  # Estado simple
+  provider: ^6.1.2
+  # Almacenamiento local (token FCM, pin)
+  shared_preferences: ^2.3.2
+  # URL launcher para llamadas
+  url_launcher: ^6.3.0
+  # Mapas (ver ubicación grúa)
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
