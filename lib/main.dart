@@ -2,10 +2,9 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'screens/home_screen.dart';
-import 'screens/tow_screen.dart';
-import 'screens/bookings_screen.dart';
-import 'screens/orders_screen.dart';
+import 'screens/splash_screen.dart';
+import 'services/fcm_service.dart';
+import 'theme/sc_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -20,6 +19,13 @@ void main() async {
       measurementId: 'G-7NCH4B2ZTX',
     ),
   );
+
+  // No usamos "await" aquí a propósito: si Firebase Messaging tarda
+  // (mala conexión, Play Services lento, etc.) la app ya no se queda
+  // congelada en blanco esperando — arranca de inmediato y el FCM se
+  // termina de configurar solo, en segundo plano.
+  FcmService.init();
+
   runApp(const SafeCarAdminApp());
 }
 
@@ -32,100 +38,46 @@ class SafeCarAdminApp extends StatelessWidget {
       title: 'Safe Car Admin',
       debugShowCheckedModeBanner: false,
       theme: _buildTheme(),
-      home: const MainNavScreen(),
+      home: const SplashScreen(),
     );
   }
 
   ThemeData _buildTheme() {
-    const bgColor = Color(0xFF0D0D0D);
-    const cardColor = Color(0xFF1A1A1A);
-    const goldColor = Color(0xFFD4AF37);
-    const textColor = Color(0xFFF5F5F5);
-
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
-      scaffoldBackgroundColor: bgColor,
-      cardColor: cardColor,
+      scaffoldBackgroundColor: SC.bg,
+      cardColor: SC.surface,
       colorScheme: const ColorScheme.dark(
-        primary: goldColor,
-        secondary: goldColor,
-        surface: cardColor,
+        primary: SC.orange,
+        secondary: SC.cyan,
+        surface: SC.surface,
         onPrimary: Colors.black,
         onSecondary: Colors.black,
-        onSurface: textColor,
+        onSurface: SC.textPrimary,
       ),
       textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme),
       appBarTheme: AppBarTheme(
-        backgroundColor: bgColor,
+        backgroundColor: SC.bg,
         elevation: 0,
         centerTitle: false,
-        titleTextStyle: GoogleFonts.playfairDisplay(
-          color: goldColor,
-          fontSize: 22,
-          fontWeight: FontWeight.bold,
-        ),
-        iconTheme: const IconThemeData(color: goldColor),
-      ),
-      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-        backgroundColor: Color(0xFF111111),
-        selectedItemColor: goldColor,
-        unselectedItemColor: Colors.white38,
-        type: BottomNavigationBarType.fixed,
+        titleTextStyle: SC.display(size: 17),
+        iconTheme: const IconThemeData(color: SC.orange),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: goldColor,
+          backgroundColor: SC.orange,
           foregroundColor: Colors.black,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         ),
       ),
       chipTheme: ChipThemeData(
-        backgroundColor: cardColor,
-        selectedColor: goldColor.withOpacity(0.2),
-        labelStyle: GoogleFonts.inter(fontSize: 12, color: textColor),
-        side: const BorderSide(color: Colors.white12),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      ),
-    );
-  }
-}
-
-class MainNavScreen extends StatefulWidget {
-  const MainNavScreen({super.key});
-  @override
-  State<MainNavScreen> createState() => _MainNavScreenState();
-}
-
-class _MainNavScreenState extends State<MainNavScreen> {
-  int _idx = 0;
-
-  final _screens = const [
-    HomeScreen(),
-    TowScreen(),
-    BookingsScreen(),
-    OrdersScreen(),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: IndexedStack(index: _idx, children: _screens),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _idx,
-        onTap: (i) => setState(() => _idx = i),
-        items: const [
-          BottomNavigationBarItem(
-              icon: Icon(Icons.dashboard_rounded), label: 'Inicio'),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.local_shipping_rounded), label: 'Grúas'),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.build_circle_rounded), label: 'Reservas'),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.shopping_bag_rounded), label: 'Pedidos'),
-        ],
+        backgroundColor: SC.surface,
+        selectedColor: SC.orange.withOpacity(0.2),
+        labelStyle: SC.body(size: 12),
+        side: const BorderSide(color: SC.border),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(7)),
       ),
     );
   }

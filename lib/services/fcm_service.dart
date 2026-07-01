@@ -15,6 +15,10 @@ class FcmService {
   static const _channelName = 'Safe Car Admin';
   static const _channelDesc = 'Alertas de grúa, reservas y pedidos';
 
+  // Naranja del cluster de instrumentos (SC.orange), consistente con
+  // el resto de la identidad visual de la app.
+  static const _accentColor = Color(0xFFFF6A1A);
+
   static Future<void> init() async {
     await _messaging.requestPermission(alert: true, badge: true, sound: true);
 
@@ -52,7 +56,7 @@ class FcmService {
             channelDescription: _channelDesc,
             importance: Importance.max,
             priority: Priority.high,
-            color: const Color(0xFFD4AF37),
+            color: _accentColor,
             icon: '@mipmap/ic_launcher',
           ),
         ),

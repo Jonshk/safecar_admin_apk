@@ -1,7 +1,10 @@
 // lib/screens/orders_screen.dart
 import 'package:flutter/material.dart';
+import 'package:hugeicons/hugeicons.dart';
 import '../services/api_service.dart';
 import '../widgets/status_badge.dart';
+import '../widgets/search_filter_bar.dart';
+import '../theme/sc_theme.dart';
 
 class OrdersScreen extends StatefulWidget {
   const OrdersScreen({super.key});
@@ -13,6 +16,17 @@ class _OrdersScreenState extends State<OrdersScreen> {
   bool _loading = true;
   List<Map<String, dynamic>> _orders = [];
   String _filter = 'all';
+  String _query = '';
+
+  List<Map<String, dynamic>> get _filteredOrders {
+    if (_query.trim().isEmpty) return _orders;
+    final q = _query.toLowerCase();
+    return _orders.where((o) {
+      final ref = (o['reference'] ?? '').toString().toLowerCase();
+      final name = (o['customer_name'] ?? '').toString().toLowerCase();
+      return ref.contains(q) || name.contains(q);
+    }).toList();
+  }
 
   @override
   void initState() {
@@ -37,7 +51,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final filters = [
+    const filters = [
       ('all', 'Todos'),
       ('awaiting_verification', 'Por verificar'),
       ('paid', 'Pagados'),
@@ -46,43 +60,41 @@ class _OrdersScreenState extends State<OrdersScreen> {
     ];
 
     return Scaffold(
+      backgroundColor: SC.bg,
       appBar: AppBar(
-        title: const Text('Pedidos de Productos'),
+        title: const Text('Pedidos de productos'),
         actions: [
-          IconButton(icon: const Icon(Icons.refresh_rounded), onPressed: _load),
+          IconButton(
+            icon: HugeIcon(icon: HugeIcons.strokeRoundedRefresh, color: SC.orange, size: 19),
+            onPressed: _load,
+          ),
         ],
       ),
       body: Column(
         children: [
-          SizedBox(
-            height: 48,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              children: filters.map((f) => Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: ChoiceChip(
-                  label: Text(f.$2),
-                  selected: _filter == f.$1,
-                  onSelected: (_) {
-                    setState(() => _filter = f.$1);
-                    _load();
-                  },
-                ),
-              )).toList(),
-            ),
+          SearchFilterBar(
+            query: _query,
+            onQueryChanged: (v) => setState(() => _query = v),
+            selectedFilter: _filter,
+            filters: filters,
+            onFilterChanged: (f) {
+              setState(() => _filter = f);
+              _load();
+            },
           ),
           Expanded(
             child: _loading
-                ? const Center(child: CircularProgressIndicator(color: Color(0xFFD4AF37)))
-                : _orders.isEmpty
-                    ? const _Empty()
+                ? const Center(child: CircularProgressIndicator(color: SC.orange))
+                : _filteredOrders.isEmpty
+                    ? const EmptyState('No hay pedidos')
                     : RefreshIndicator(
-                        color: const Color(0xFFD4AF37),
+                        color: SC.orange,
+                        backgroundColor: SC.surface,
                         onRefresh: _load,
                         child: ListView.builder(
-                          itemCount: _orders.length,
-                          itemBuilder: (_, i) => _OrderCard(order: _orders[i]),
+                          padding: const EdgeInsets.symmetric(vertical: 6),
+                          itemCount: _filteredOrders.length,
+                          itemBuilder: (_, i) => _OrderCard(order: _filteredOrders[i]),
                         ),
                       ),
           ),
@@ -104,43 +116,30 @@ class _OrderCard extends StatelessWidget {
     return AdminCard(
       onTap: () => _showDetail(context),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(14),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
+            HugeIcon(icon: HugeIcons.strokeRoundedPackage, color: SC.textPrimary, size: 16),
+            const SizedBox(width: 8),
             Expanded(
-              child: Text(
-                order['reference'] ?? '',
-                style: const TextStyle(
-                    color: Color(0xFFD4AF37), fontWeight: FontWeight.bold),
-              ),
+              child: Text(order['reference'] ?? '',
+                  style: SC.mono(size: 12, color: SC.textSecondary)),
             ),
             StatusBadge(order['payment_status'] ?? 'pending'),
           ]),
           const SizedBox(height: 10),
-          Row(children: [
-            const Icon(Icons.person_rounded, size: 14, color: Colors.white38),
-            const SizedBox(width: 6),
-            Expanded(child: Text(order['customer_name'] ?? '',
-                style: const TextStyle(color: Colors.white70, fontSize: 13))),
-          ]),
+          InfoRow(Icons.person_rounded, order['customer_name'] ?? ''),
           const SizedBox(height: 4),
           Row(children: [
-            const Icon(Icons.inventory_2_rounded, size: 14, color: Colors.white38),
+            Icon(Icons.inventory_2_rounded, size: 13, color: SC.textMuted),
             const SizedBox(width: 6),
-            Text('${items.length} producto(s)',
-                style: const TextStyle(color: Colors.white70, fontSize: 13)),
+            Text('${items.length} producto(s)', style: SC.body(size: 12.5, color: SC.textSecondary)),
             const Spacer(),
             Text('\$${total.toStringAsFixed(2)}',
-                style: const TextStyle(
-                    color: Color(0xFFD4AF37), fontWeight: FontWeight.bold, fontSize: 15)),
+                style: SC.mono(size: 14, color: SC.orange)),
           ]),
           const SizedBox(height: 4),
-          Row(children: [
-            const Icon(Icons.payment_rounded, size: 14, color: Colors.white38),
-            const SizedBox(width: 6),
-            Text(_paymentLabel(order['payment_method'] ?? ''),
-                style: const TextStyle(color: Colors.white70, fontSize: 13)),
-          ]),
+          InfoRow(Icons.payment_rounded, _paymentLabel(order['payment_method'] ?? '')),
         ]),
       ),
     );
@@ -150,24 +149,24 @@ class _OrderCard extends StatelessWidget {
     final items = (order['items'] as List?) ?? [];
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF1A1A1A),
+      backgroundColor: SC.surface,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
       builder: (_) => DraggableScrollableSheet(
         expand: false,
         initialChildSize: 0.8,
         builder: (_, sc) => SingleChildScrollView(
           controller: sc,
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(22),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
               Expanded(child: Text(order['reference'] ?? '',
-                  style: const TextStyle(color: Color(0xFFD4AF37), fontSize: 18, fontWeight: FontWeight.bold))),
+                  style: SC.mono(size: 15, color: SC.orange))),
               StatusBadge(order['payment_status'] ?? 'pending'),
             ]),
-            const Divider(color: Colors.white12, height: 24),
+            const SizedBox(height: 16),
             _DR('Cliente', order['customer_name'] ?? ''),
             _DR('Email', order['customer_email'] ?? ''),
             _DR('Teléfono', order['customer_phone'] ?? ''),
@@ -176,18 +175,18 @@ class _OrderCard extends StatelessWidget {
             _DR('Total', '\$${(order['total'] ?? 0.0).toStringAsFixed(2)}'),
             _DR('Fecha', order['created_at'] ?? ''),
             const SizedBox(height: 16),
-            const Text('Productos', style: TextStyle(
-                color: Color(0xFFD4AF37), fontWeight: FontWeight.bold, fontSize: 15)),
+            Text('PRODUCTOS',
+                style: SC.display(size: 12, color: SC.orange).copyWith(letterSpacing: 1.2)),
             const SizedBox(height: 8),
             ...items.map((item) => Padding(
               padding: const EdgeInsets.symmetric(vertical: 4),
               child: Row(children: [
                 Expanded(child: Text(
                   '${item['quantity']}x ${item['part_name']}',
-                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                  style: SC.body(size: 13),
                 )),
                 Text('\$${(item['subtotal'] ?? 0.0).toStringAsFixed(2)}',
-                    style: const TextStyle(color: Colors.white54, fontSize: 13)),
+                    style: SC.mono(size: 12, color: SC.textMuted)),
               ]),
             )),
             if ((order['confirmation_note'] ?? '').isNotEmpty) ...[
@@ -217,20 +216,8 @@ class _DR extends StatelessWidget {
     padding: const EdgeInsets.symmetric(vertical: 5),
     child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
       SizedBox(width: 110,
-          child: Text(label, style: const TextStyle(color: Colors.white38, fontSize: 12))),
-      Expanded(child: Text(value, style: const TextStyle(color: Colors.white, fontSize: 14))),
-    ]),
-  );
-}
-
-class _Empty extends StatelessWidget {
-  const _Empty();
-  @override
-  Widget build(BuildContext context) => const Center(
-    child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-      Icon(Icons.inbox_rounded, color: Colors.white24, size: 64),
-      SizedBox(height: 12),
-      Text('No hay pedidos', style: TextStyle(color: Colors.white38)),
+          child: Text(label, style: SC.body(size: 11.5, color: SC.textMuted))),
+      Expanded(child: Text(value, style: SC.body(size: 13))),
     ]),
   );
 }

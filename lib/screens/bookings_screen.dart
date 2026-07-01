@@ -1,8 +1,11 @@
 // lib/screens/bookings_screen.dart
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:hugeicons/hugeicons.dart';
 import '../services/api_service.dart';
 import '../widgets/status_badge.dart';
+import '../widgets/search_filter_bar.dart';
+import '../theme/sc_theme.dart';
 
 class BookingsScreen extends StatefulWidget {
   const BookingsScreen({super.key});
@@ -14,6 +17,17 @@ class _BookingsScreenState extends State<BookingsScreen> {
   bool _loading = true;
   List<Map<String, dynamic>> _bookings = [];
   String _filter = 'all';
+  String _query = '';
+
+  List<Map<String, dynamic>> get _filteredBookings {
+    if (_query.trim().isEmpty) return _bookings;
+    final q = _query.toLowerCase();
+    return _bookings.where((b) {
+      final ref = (b['reference'] ?? '').toString().toLowerCase();
+      final name = (b['customer_name'] ?? '').toString().toLowerCase();
+      return ref.contains(q) || name.contains(q);
+    }).toList();
+  }
 
   @override
   void initState() {
@@ -38,32 +52,40 @@ class _BookingsScreenState extends State<BookingsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: SC.bg,
       appBar: AppBar(
-        title: const Text('Reservas de Servicio'),
+        title: const Text('Reservas de servicio'),
         actions: [
-          IconButton(icon: const Icon(Icons.refresh_rounded), onPressed: _load)
+          IconButton(
+            icon: HugeIcon(icon: HugeIcons.strokeRoundedRefresh, color: SC.orange, size: 19),
+            onPressed: _load,
+          ),
         ],
       ),
       body: Column(children: [
-        FilterBar(
-            selected: _filter,
-            onChanged: (f) {
-              setState(() => _filter = f);
-              _load();
-            }),
+        SearchFilterBar(
+          query: _query,
+          onQueryChanged: (v) => setState(() => _query = v),
+          selectedFilter: _filter,
+          onFilterChanged: (f) {
+            setState(() => _filter = f);
+            _load();
+          },
+        ),
         Expanded(
           child: _loading
-              ? const Center(
-                  child: CircularProgressIndicator(color: Color(0xFFD4AF37)))
-              : _bookings.isEmpty
+              ? const Center(child: CircularProgressIndicator(color: SC.orange))
+              : _filteredBookings.isEmpty
                   ? const EmptyState('No hay reservas de servicio')
                   : RefreshIndicator(
-                      color: const Color(0xFFD4AF37),
+                      color: SC.orange,
+                      backgroundColor: SC.surface,
                       onRefresh: _load,
                       child: ListView.builder(
-                        itemCount: _bookings.length,
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        itemCount: _filteredBookings.length,
                         itemBuilder: (_, i) => _BookingCard(
-                            booking: _bookings[i], onStatusChanged: _load),
+                            booking: _filteredBookings[i], onStatusChanged: _load),
                       ),
                     ),
         ),
@@ -85,14 +107,14 @@ class _BookingCard extends StatelessWidget {
     return AdminCard(
       onTap: () => _showDetail(context),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(14),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
+            HugeIcon(icon: HugeIcons.strokeRoundedWrench01, color: SC.cyan, size: 16),
+            const SizedBox(width: 8),
             Expanded(
                 child: Text(booking['reference'] ?? '',
-                    style: const TextStyle(
-                        color: Color(0xFFD4AF37),
-                        fontWeight: FontWeight.bold))),
+                    style: SC.mono(size: 12, color: SC.textSecondary))),
             StatusBadge(booking['status'] ?? 'pending'),
           ]),
           const SizedBox(height: 8),
@@ -107,12 +129,12 @@ class _BookingCard extends StatelessWidget {
               Icons.calendar_today_rounded,
               '${booking['preferred_date']} ${booking['preferred_time'] ?? ''}'
                   .trim()),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           Row(children: [
             ActionBtn(
               icon: Icons.phone_rounded,
               label: 'Llamar',
-              color: const Color(0xFF10B981),
+              color: SC.cyan,
               onTap: () =>
                   launchUrl(Uri.parse('tel:${booking['customer_phone']}')),
             ),
@@ -120,7 +142,7 @@ class _BookingCard extends StatelessWidget {
             ActionBtn(
               icon: Icons.edit_rounded,
               label: 'Estado',
-              color: const Color(0xFFD4AF37),
+              color: SC.orange,
               onTap: () => _changeStatus(context),
             ),
           ]),
@@ -156,30 +178,27 @@ class _BookingCard extends StatelessWidget {
             .trim();
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF1A1A1A),
+      backgroundColor: SC.surface,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
       builder: (_) => DraggableScrollableSheet(
         expand: false,
         initialChildSize: 0.75,
         builder: (_, sc) => SingleChildScrollView(
           controller: sc,
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(22),
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
               Expanded(
                   child: Text(booking['reference'] ?? '',
-                      style: const TextStyle(
-                          color: Color(0xFFD4AF37),
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold))),
+                      style: SC.mono(size: 15, color: SC.orange))),
               StatusBadge(booking['status'] ?? 'pending'),
             ]),
             const SizedBox(height: 8),
             _ServicePill(booking['service_type'] ?? ''),
-            const Divider(color: Colors.white12, height: 24),
+            const SizedBox(height: 16),
             _DR('Cliente', booking['customer_name'] ?? ''),
             _DR('Email', booking['customer_email'] ?? ''),
             _DR('Teléfono', booking['customer_phone'] ?? ''),
@@ -190,7 +209,7 @@ class _BookingCard extends StatelessWidget {
             if ((booking['notes'] ?? '').isNotEmpty)
               _DR('Notas', booking['notes']),
             _DR('Creado', booking['created_at'] ?? ''),
-            const SizedBox(height: 20),
+            const SizedBox(height: 18),
             SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
@@ -211,30 +230,29 @@ class _ServicePill extends StatelessWidget {
   const _ServicePill(this.type);
 
   static const _labels = {
-    'oil_change': ('Cambio de aceite', Color(0xFFF59E0B)),
-    'brake_service': ('Frenos', Color(0xFFEF4444)),
-    'diagnostics': ('Diagnóstico', Color(0xFF8B5CF6)),
-    'tire_rotation': ('Neumáticos', Color(0xFF3B82F6)),
-    'general_repair': ('Reparación general', Color(0xFF10B981)),
-    'tow_followup': ('Seguimiento grúa', Color(0xFFD4AF37)),
-    'other': ('Otro', Colors.white38),
+    'oil_change': ('Cambio de aceite', SC.cyan),
+    'brake_service': ('Frenos', SC.orange),
+    'diagnostics': ('Diagnóstico', SC.cyan),
+    'tire_rotation': ('Neumáticos', SC.cyan),
+    'general_repair': ('Reparación general', SC.success),
+    'tow_followup': ('Seguimiento grúa', SC.orange),
+    'other': ('Otro', SC.textMuted),
   };
 
   @override
   Widget build(BuildContext context) {
     final entry = _labels[type];
     final label = entry?.$1 ?? type;
-    final color = entry?.$2 ?? Colors.white38;
+    final color = entry?.$2 ?? SC.textMuted;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.4)),
+        color: SC.bg,
+        borderRadius: BorderRadius.circular(5),
+        border: Border.all(color: color.withOpacity(0.35)),
       ),
       child: Text(label,
-          style: TextStyle(
-              color: color, fontSize: 12, fontWeight: FontWeight.w600)),
+          style: SC.body(size: 11, weight: FontWeight.w500, color: color)),
     );
   }
 }
@@ -248,11 +266,8 @@ class _DR extends StatelessWidget {
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           SizedBox(
               width: 90,
-              child: Text(label,
-                  style: const TextStyle(color: Colors.white38, fontSize: 12))),
-          Expanded(
-              child: Text(value,
-                  style: const TextStyle(color: Colors.white, fontSize: 14))),
+              child: Text(label, style: SC.body(size: 11.5, color: SC.textMuted))),
+          Expanded(child: Text(value, style: SC.body(size: 13))),
         ]),
       );
 }

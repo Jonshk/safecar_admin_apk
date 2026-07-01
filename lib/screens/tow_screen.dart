@@ -1,8 +1,22 @@
 // lib/screens/tow_screen.dart
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:hugeicons/hugeicons.dart';
 import '../services/api_service.dart';
+import '../services/technician_location_service.dart';
 import '../widgets/status_badge.dart';
+import '../widgets/search_filter_bar.dart';
+import '../theme/sc_theme.dart';
+
+/// Para grúas, "in_progress" se le muestra al cliente como "En camino"
+/// (no "En curso") porque implica desplazamiento físico con GPS.
+const _towLabels = {
+  'pending': 'Pendiente',
+  'confirmed': 'Confirmado',
+  'in_progress': 'En camino',
+  'completed': 'Completado',
+  'cancelled': 'Cancelado',
+};
 
 class TowScreen extends StatefulWidget {
   const TowScreen({super.key});
@@ -14,6 +28,17 @@ class _TowScreenState extends State<TowScreen> {
   bool _loading = true;
   List<Map<String, dynamic>> _tows = [];
   String _filter = 'all';
+  String _query = '';
+
+  List<Map<String, dynamic>> get _filteredTows {
+    if (_query.trim().isEmpty) return _tows;
+    final q = _query.toLowerCase();
+    return _tows.where((t) {
+      final ref = (t['reference'] ?? '').toString().toLowerCase();
+      final name = (t['customer_name'] ?? '').toString().toLowerCase();
+      return ref.contains(q) || name.contains(q);
+    }).toList();
+  }
 
   @override
   void initState() {
@@ -38,32 +63,40 @@ class _TowScreenState extends State<TowScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: SC.bg,
       appBar: AppBar(
-        title: const Text('Solicitudes de Grúa'),
+        title: const Text('Solicitudes de grúa'),
         actions: [
-          IconButton(icon: const Icon(Icons.refresh_rounded), onPressed: _load)
+          IconButton(
+            icon: HugeIcon(icon: HugeIcons.strokeRoundedRefresh, color: SC.orange, size: 19),
+            onPressed: _load,
+          ),
         ],
       ),
       body: Column(children: [
-        FilterBar(
-            selected: _filter,
-            onChanged: (f) {
-              setState(() => _filter = f);
-              _load();
-            }),
+        SearchFilterBar(
+          query: _query,
+          onQueryChanged: (v) => setState(() => _query = v),
+          selectedFilter: _filter,
+          onFilterChanged: (f) {
+            setState(() => _filter = f);
+            _load();
+          },
+        ),
         Expanded(
           child: _loading
-              ? const Center(
-                  child: CircularProgressIndicator(color: Color(0xFFD4AF37)))
-              : _tows.isEmpty
+              ? const Center(child: CircularProgressIndicator(color: SC.orange))
+              : _filteredTows.isEmpty
                   ? const EmptyState('No hay solicitudes de grúa')
                   : RefreshIndicator(
-                      color: const Color(0xFFD4AF37),
+                      color: SC.orange,
+                      backgroundColor: SC.surface,
                       onRefresh: _load,
                       child: ListView.builder(
-                        itemCount: _tows.length,
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        itemCount: _filteredTows.length,
                         itemBuilder: (_, i) =>
-                            _TowCard(tow: _tows[i], onStatusChanged: _load),
+                            _TowCard(tow: _filteredTows[i], onStatusChanged: _load),
                       ),
                     ),
         ),
@@ -85,29 +118,33 @@ class _TowCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final status = tow['status'] ?? 'pending';
     return AdminCard(
       onTap: () => _showDetail(context),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(14),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
+            HugeIcon(icon: HugeIcons.strokeRoundedTowTruck, color: SC.orange, size: 16),
+            const SizedBox(width: 8),
             Expanded(
                 child: Text(tow['reference'] ?? '',
-                    style: const TextStyle(
-                        color: Color(0xFFD4AF37),
-                        fontWeight: FontWeight.bold))),
-            StatusBadge(tow['status'] ?? 'pending'),
+                    style: SC.mono(size: 12, color: SC.textSecondary))),
+            StatusBadge(status, overrideLabel: _towLabels[status]),
           ]),
           const SizedBox(height: 10),
           InfoRow(Icons.person_rounded, tow['customer_name'] ?? ''),
           const SizedBox(height: 4),
-          InfoRow(
-              Icons.directions_car_rounded, tow['vehicle_description'] ?? ''),
+          InfoRow(Icons.directions_car_rounded, tow['vehicle_description'] ?? ''),
           const SizedBox(height: 4),
           InfoRow(Icons.location_on_rounded, tow['pickup_address'] ?? ''),
           if ((tow['destination_address'] ?? '').isNotEmpty) ...[
             const SizedBox(height: 4),
             InfoRow(Icons.flag_rounded, tow['destination_address']),
+          ],
+          if (status == 'in_progress') ...[
+            const SizedBox(height: 8),
+            const _TrackingPulse(),
           ],
           if (_hasGps) ...[
             const SizedBox(height: 8),
@@ -116,12 +153,14 @@ class _TowCard extends StatelessWidget {
               lng: (tow['pickup_lng'] as num).toDouble(),
             ),
           ],
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
+          const _LaneDivider(),
+          const SizedBox(height: 10),
           Row(children: [
             ActionBtn(
               icon: Icons.phone_rounded,
               label: 'Llamar',
-              color: const Color(0xFF10B981),
+              color: SC.cyan,
               onTap: () => launchUrl(Uri.parse('tel:${tow['customer_phone']}')),
             ),
             const SizedBox(width: 8),
@@ -129,7 +168,7 @@ class _TowCard extends StatelessWidget {
               ActionBtn(
                 icon: Icons.map_rounded,
                 label: 'Maps',
-                color: const Color(0xFF3B82F6),
+                color: SC.textPrimary,
                 onTap: () => _openMaps(),
               ),
               const SizedBox(width: 8),
@@ -137,7 +176,7 @@ class _TowCard extends StatelessWidget {
             ActionBtn(
               icon: Icons.edit_rounded,
               label: 'Estado',
-              color: const Color(0xFFD4AF37),
+              color: SC.orange,
               onTap: () => _changeStatus(context),
             ),
           ]),
@@ -160,6 +199,7 @@ class _TowCard extends StatelessWidget {
       backgroundColor: Colors.transparent,
       builder: (_) => StatusSelectorSheet(
         currentStatus: tow['status'] ?? 'pending',
+        labelOverrides: _towLabels,
         options: const [
           'pending',
           'confirmed',
@@ -169,6 +209,16 @@ class _TowCard extends StatelessWidget {
         ],
         onSelected: (s) async {
           await ApiService.updateTowStatus(tow['id'], s);
+
+          // Arranca el envío de GPS del técnico solo cuando pasa a
+          // "en camino"; lo detiene en cualquier otro estado
+          // (completado, cancelado, o si se retrocede el estado).
+          if (s == 'in_progress') {
+            await TechnicianLocationService.instance.start(tow['id'] as int);
+          } else if (TechnicianLocationService.instance.activeTowId == tow['id']) {
+            await TechnicianLocationService.instance.stop();
+          }
+
           onStatusChanged();
         },
       ),
@@ -176,30 +226,30 @@ class _TowCard extends StatelessWidget {
   }
 
   void _showDetail(BuildContext context) {
+    final status = tow['status'] ?? 'pending';
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF1A1A1A),
+      backgroundColor: SC.surface,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
       builder: (_) => DraggableScrollableSheet(
         expand: false,
         initialChildSize: 0.75,
         builder: (_, sc) => SingleChildScrollView(
           controller: sc,
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(22),
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
               Expanded(
                   child: Text(tow['reference'] ?? '',
-                      style: const TextStyle(
-                          color: Color(0xFFD4AF37),
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold))),
-              StatusBadge(tow['status'] ?? 'pending'),
+                      style: SC.mono(size: 15, color: SC.orange))),
+              StatusBadge(status, overrideLabel: _towLabels[status]),
             ]),
-            const Divider(color: Colors.white12, height: 24),
+            const SizedBox(height: 16),
+            const _LaneDivider(),
+            const SizedBox(height: 16),
             _DR('Cliente', tow['customer_name'] ?? ''),
             _DR('Teléfono', tow['customer_phone'] ?? ''),
             _DR('Vehículo', tow['vehicle_description'] ?? ''),
@@ -213,7 +263,7 @@ class _TowCard extends StatelessWidget {
                   'GPS',
                   '${(tow['pickup_lat'] as num).toStringAsFixed(6)}, '
                       '${(tow['pickup_lng'] as num).toStringAsFixed(6)}'),
-            const SizedBox(height: 20),
+            const SizedBox(height: 18),
             if (_hasGps)
               SizedBox(
                   width: double.infinity,
@@ -221,11 +271,12 @@ class _TowCard extends StatelessWidget {
                     icon: const Icon(Icons.map_rounded),
                     label: const Text('Abrir en Google Maps'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF1A73E8),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      backgroundColor: SC.surfaceAlt,
+                      foregroundColor: SC.textPrimary,
+                      side: const BorderSide(color: SC.border),
+                      padding: const EdgeInsets.symmetric(vertical: 13),
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
+                          borderRadius: BorderRadius.circular(8)),
                     ),
                     onPressed: _openMaps,
                   )),
@@ -245,27 +296,94 @@ class _TowCard extends StatelessWidget {
   }
 }
 
+/// Indicador de que el GPS del técnico está activo y transmitiendo —
+/// se muestra solo cuando el estado es in_progress.
+class _TrackingPulse extends StatefulWidget {
+  const _TrackingPulse();
+  @override
+  State<_TrackingPulse> createState() => _TrackingPulseState();
+}
+
+class _TrackingPulseState extends State<_TrackingPulse>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c;
+  @override
+  void initState() {
+    super.initState();
+    _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200))
+      ..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+      decoration: BoxDecoration(
+        color: SC.orangeBg,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: SC.orange.withOpacity(0.3)),
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        FadeTransition(
+          opacity: _c,
+          child: Container(
+            width: 6,
+            height: 6,
+            decoration: const BoxDecoration(color: SC.orange, shape: BoxShape.circle),
+          ),
+        ),
+        const SizedBox(width: 7),
+        Text('GPS transmitiendo en vivo',
+            style: SC.mono(size: 10, color: SC.orange, weight: FontWeight.w500)),
+      ]),
+    );
+  }
+}
+
+class _LaneDivider extends StatelessWidget {
+  const _LaneDivider();
+  @override
+  Widget build(BuildContext context) =>
+      CustomPaint(size: const Size(double.infinity, 1), painter: _DashPainter());
+}
+
+class _DashPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..color = SC.border..strokeWidth = 1;
+    double x = 0;
+    while (x < size.width) {
+      canvas.drawLine(Offset(x, 0), Offset(x + 5, 0), paint);
+      x += 10;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
 class _GpsBadge extends StatelessWidget {
   final double lat, lng;
   const _GpsBadge({required this.lat, required this.lng});
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
         decoration: BoxDecoration(
-          color: const Color(0xFF002800),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: const Color(0xFF00C47A).withOpacity(0.4)),
+          color: SC.cyanBg,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: SC.cyan.withOpacity(0.35)),
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
-          const Icon(Icons.gps_fixed_rounded,
-              size: 12, color: Color(0xFF00C47A)),
+          Icon(Icons.gps_fixed_rounded, size: 12, color: SC.cyan),
           const SizedBox(width: 6),
           Text('${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}',
-              style: const TextStyle(
-                  color: Color(0xFF00C47A),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  fontFamily: 'monospace')),
+              style: SC.mono(size: 10.5, color: SC.cyan, weight: FontWeight.w500)),
         ]),
       );
 }
@@ -279,11 +397,8 @@ class _DR extends StatelessWidget {
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           SizedBox(
               width: 80,
-              child: Text(label,
-                  style: const TextStyle(color: Colors.white38, fontSize: 12))),
-          Expanded(
-              child: Text(value,
-                  style: const TextStyle(color: Colors.white, fontSize: 14))),
+              child: Text(label, style: SC.body(size: 11.5, color: SC.textMuted))),
+          Expanded(child: Text(value, style: SC.body(size: 13))),
         ]),
       );
 }

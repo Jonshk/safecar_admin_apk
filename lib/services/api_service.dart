@@ -28,6 +28,23 @@ class ApiService {
     return Map<String, dynamic>.from(jsonDecode(res.body));
   }
 
+  /// Manda la posición GPS del técnico mientras la grúa está en
+  /// camino. Llamado cada ~30s por TechnicianLocationService.
+  static Future<void> updateTechnicianLocation(
+      int towId, double lat, double lng) async {
+    try {
+      await http.patch(
+        Uri.parse('$kTowEndpoint/$towId/location'),
+        headers: _headers,
+        body: jsonEncode({'technician_lat': lat, 'technician_lng': lng}),
+      );
+    } catch (_) {
+      // Falla silenciosa a propósito: si una actualización de GPS se
+      // pierde por mala señal, la siguiente (30s después) la corrige.
+      // No queremos tronar la UI del admin por esto.
+    }
+  }
+
   // ── Reservas de servicio ───────────────────────────────
 
   static Future<List<Map<String, dynamic>>> getBookings({String? status}) async {
