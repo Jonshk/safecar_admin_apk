@@ -7,6 +7,7 @@ import '../services/technician_location_service.dart';
 import '../widgets/status_badge.dart';
 import '../widgets/search_filter_bar.dart';
 import '../theme/sc_theme.dart';
+import 'chat_screen_admin.dart';
 
 /// Para grúas, "in_progress" se le muestra al cliente como "En camino"
 /// (no "En curso") porque implica desplazamiento físico con GPS.
@@ -173,6 +174,23 @@ class _TowCard extends StatelessWidget {
               ),
               const SizedBox(width: 8),
             ],
+            if (status == 'confirmed' || status == 'in_progress') ...[
+              ActionBtn(
+                icon: Icons.chat_bubble_outline_rounded,
+                label: 'Chat',
+                color: SC.orange,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ChatScreenAdmin(
+                      towId: tow['id'] as int,
+                      technicianName: 'Técnico Safe Car',
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+            ],
             ActionBtn(
               icon: Icons.edit_rounded,
               label: 'Estado',
@@ -289,6 +307,33 @@ class _TowCard extends StatelessWidget {
                   onPressed: () =>
                       launchUrl(Uri.parse('tel:${tow['customer_phone']}')),
                 )),
+            if (status == 'confirmed' || status == 'in_progress') ...[
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  icon: const Icon(Icons.chat_bubble_outline_rounded),
+                  label: const Text('Chat con el cliente'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: SC.orangeBg,
+                    foregroundColor: SC.orange,
+                    side: BorderSide(color: SC.orange.withOpacity(0.4)),
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ChatScreenAdmin(
+                        towId: tow['id'] as int,
+                        technicianName: 'Técnico Safe Car',
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ]),
         ),
       ),
