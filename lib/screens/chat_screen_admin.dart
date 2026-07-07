@@ -37,7 +37,9 @@ class _ChatScreenAdminState extends State<ChatScreenAdmin> {
   }
 
   Future<void> _load() async {
+    debugPrint('CHAT_ADMIN LOAD: tow_id=${widget.towId} afterId=$_lastId');
     final msgs = await ApiService.getChatMessages(widget.towId, afterId: _lastId);
+    debugPrint('CHAT_ADMIN LOAD result: ${msgs.length} msgs');
     if (msgs.isEmpty || !mounted) return;
     setState(() {
       _messages.addAll(msgs);
@@ -53,6 +55,7 @@ class _ChatScreenAdminState extends State<ChatScreenAdmin> {
 
   Future<void> _send() async {
     final text = _ctrl.text.trim();
+    debugPrint('CHAT_ADMIN SEND: tow_id=${widget.towId} text=$text');
     if (text.isEmpty || _sending) return;
     setState(() => _sending = true);
     _ctrl.clear();
@@ -70,6 +73,7 @@ class _ChatScreenAdminState extends State<ChatScreenAdmin> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: SC.bg,
+      resizeToAvoidBottomInset: true,
       appBar: AppBar(
         backgroundColor: SC.surface,
         title: Row(
@@ -83,13 +87,14 @@ class _ChatScreenAdminState extends State<ChatScreenAdmin> {
           ],
         ),
       ),
-      body: Column(
+      body: SafeArea(
+        child: Column(
         children: [
           Expanded(
             child: _messages.isEmpty
                 ? Center(
                     child: Text('Sin mensajes aún.',
-                        style: TextStyle(color: SC.white30, fontSize: 14)),
+                        style: TextStyle(color: SC.textMuted, fontSize: 14)),
                   )
                 : ListView.builder(
                     controller: _scroll,
@@ -100,6 +105,7 @@ class _ChatScreenAdminState extends State<ChatScreenAdmin> {
           ),
           _buildInput(),
         ],
+      ),
       ),
     );
   }
@@ -144,10 +150,7 @@ class _ChatScreenAdminState extends State<ChatScreenAdmin> {
 
   Widget _buildInput() {
     return Container(
-      padding: EdgeInsets.only(
-        left: 12, right: 12, top: 10,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 12,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: SC.surface,
         border: Border(top: BorderSide(color: SC.border)),
@@ -169,7 +172,7 @@ class _ChatScreenAdminState extends State<ChatScreenAdmin> {
                 onSubmitted: (_) => _send(),
                 decoration: InputDecoration(
                   hintText: 'Escribe al cliente...',
-                  hintStyle: TextStyle(color: SC.white30, fontSize: 13),
+                  hintStyle: TextStyle(color: SC.textMuted, fontSize: 13),
                   border: InputBorder.none,
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 ),

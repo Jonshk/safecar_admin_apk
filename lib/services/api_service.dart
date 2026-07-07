@@ -1,199 +1,130 @@
-// lib/screens/chat_screen_admin.dart
-import 'dart:async';
-import 'package:flutter/material.dart';
-import '../theme/sc_theme.dart';
-import '../services/api_service.dart';
+// lib/services/api_service.dart
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'api_config.dart';
 
-class ChatScreenAdmin extends StatefulWidget {
-  final int towId;
-  final String technicianName;
-  const ChatScreenAdmin({super.key, required this.towId, required this.technicianName});
+class ApiService {
+  static const _headers = {'Content-Type': 'application/json'};
 
-  @override
-  State<ChatScreenAdmin> createState() => _ChatScreenAdminState();
-}
+  // ── Grúas ──────────────────────────────────────────────
 
-class _ChatScreenAdminState extends State<ChatScreenAdmin> {
-  final _ctrl = TextEditingController();
-  final _scroll = ScrollController();
-  final List<Map<String, dynamic>> _messages = [];
-  int _lastId = 0;
-  bool _sending = false;
-  Timer? _poll;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-    _poll = Timer.periodic(const Duration(seconds: 4), (_) => _load());
+  static Future<List<Map<String, dynamic>>> getTowRequests({String? status}) async {
+    final uri = Uri.parse(status != null
+        ? '$kTowEndpoint?status=$status&limit=100'
+        : '$kTowEndpoint?limit=100');
+    final res = await http.get(uri, headers: _headers);
+    _checkStatus(res);
+    return List<Map<String, dynamic>>.from(jsonDecode(res.body));
   }
 
-  @override
-  void dispose() {
-    _poll?.cancel();
-    _ctrl.dispose();
-    _scroll.dispose();
-    super.dispose();
-  }
-
-  Future<void> _load() async {
-    final msgs = await ApiService.getChatMessages(widget.towId, afterId: _lastId);
-    if (msgs.isEmpty || !mounted) return;
-    setState(() {
-      _messages.addAll(msgs);
-      _lastId = msgs.last['id'] as int;
-    });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scroll.hasClients) {
-        _scroll.animateTo(_scroll.position.maxScrollExtent,
-            duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
-      }
-    });
-  }
-
-  Future<void> _send() async {
-    final text = _ctrl.text.trim();
-    if (text.isEmpty || _sending) return;
-    setState(() => _sending = true);
-    _ctrl.clear();
-    final ok = await ApiService.sendChatMessage(
-      towId: widget.towId,
-      sender: 'technician',
-      senderName: widget.technicianName,
-      text: text,
+  static Future<Map<String, dynamic>> updateTowStatus(
+      int id, String status, {String adminNotes = ''}) async {
+    final res = await http.patch(
+      Uri.parse('$kTowEndpoint/$id/status'),
+      headers: _headers,
+      body: jsonEncode({'status': status, 'admin_notes': adminNotes}),
     );
-    setState(() => _sending = false);
-    if (ok) _load();
+    _checkStatus(res);
+    return Map<String, dynamic>.from(jsonDecode(res.body));
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: SC.bg,
-      appBar: AppBar(
-        backgroundColor: SC.surface,
-        title: Row(
-          children: [
-            Container(
-              width: 8, height: 8,
-              decoration: const BoxDecoration(color: SC.cyan, shape: BoxShape.circle),
-            ),
-            const SizedBox(width: 8),
-            const Text('Chat con el cliente'),
-          ],
-        ),
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: _messages.isEmpty
-                ? Center(
-                    child: Text('Sin mensajes aún.',
-                        style: TextStyle(color: SC.white30, fontSize: 14)),
-                  )
-                : ListView.builder(
-                    controller: _scroll,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    itemCount: _messages.length,
-                    itemBuilder: (_, i) => _buildBubble(_messages[i]),
-                  ),
-          ),
-          _buildInput(),
-        ],
-      ),
+  /// Manda la posición GPS del técnico mientras la grúa está en
+  /// camino. Llamado cada ~30s por TechnicianLocationService.
+  static Future<void> updateTechnicianLocation(
+      int towId, double lat, double lng) async {
+    try {
+      await http.patch(
+        Uri.parse('$kTowEndpoint/$towId/location'),
+        headers: _headers,
+        body: jsonEncode({'technician_lat': lat, 'technician_lng': lng}),
+      );
+    } catch (_) {
+      // Falla silenciosa a propósito: si una actualización de GPS se
+      // pierde por mala señal, la siguiente (30s después) la corrige.
+      // No queremos tronar la UI del admin por esto.
+    }
+  }
+
+  // ── Chat ──────────────────────────────────────────────────────
+
+  static Future<List<Map<String, dynamic>>> getChatMessages(int towId, {int afterId = 0}) async {
+    try {
+      final r = await http
+          .get(Uri.parse('$kBaseUrl/chat/$towId?after_id=$afterId'), headers: _headers)
+          .timeout(const Duration(seconds: 10));
+      if (r.statusCode == 200) return List<Map<String, dynamic>>.from(jsonDecode(r.body));
+    } catch (_) {}
+    return [];
+  }
+
+  static Future<bool> sendChatMessage({
+    required int towId,
+    required String sender,
+    required String senderName,
+    required String text,
+  }) async {
+    try {
+      final r = await http
+          .post(Uri.parse('$kBaseUrl/chat/'), headers: _headers,
+              body: jsonEncode({'tow_id': towId, 'sender': sender, 'sender_name': senderName, 'text': text}))
+          .timeout(const Duration(seconds: 10));
+      return r.statusCode == 201;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> getBookings({String? status}) async {
+    final uri = Uri.parse(status != null
+        ? '$kBookingsEndpoint?status=$status&limit=100'
+        : '$kBookingsEndpoint?limit=100');
+    final res = await http.get(uri, headers: _headers);
+    _checkStatus(res);
+    return List<Map<String, dynamic>>.from(jsonDecode(res.body));
+  }
+
+  static Future<Map<String, dynamic>> updateBookingStatus(
+      int id, String status, {String adminNotes = ''}) async {
+    final res = await http.patch(
+      Uri.parse('$kBookingsEndpoint/$id/status'),
+      headers: _headers,
+      body: jsonEncode({'status': status, 'admin_notes': adminNotes}),
     );
+    _checkStatus(res);
+    return Map<String, dynamic>.from(jsonDecode(res.body));
   }
 
-  Widget _buildBubble(Map<String, dynamic> msg) {
-    final isMe = msg['sender'] == 'technician';
-    return Align(
-      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.72),
-        decoration: BoxDecoration(
-          color: isMe ? SC.orange : SC.surface,
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(16),
-            topRight: const Radius.circular(16),
-            bottomLeft: Radius.circular(isMe ? 16 : 4),
-            bottomRight: Radius.circular(isMe ? 4 : 16),
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-          children: [
-            if (!isMe) ...[
-              Text(msg['sender_name'] ?? 'Cliente',
-                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: SC.cyan)),
-              const SizedBox(height: 3),
-            ],
-            Text(msg['text'] ?? '',
-                style: const TextStyle(color: Colors.white, fontSize: 14)),
-            const SizedBox(height: 3),
-            Text(
-              (msg['created_at'] as String?)?.substring(11, 16) ?? '',
-              style: TextStyle(fontSize: 10, color: Colors.white.withOpacity(0.45)),
-            ),
-          ],
-        ),
-      ),
+  // ── Órdenes de productos ───────────────────────────────
+
+  static Future<List<Map<String, dynamic>>> getOrders() async {
+    final res = await http.get(Uri.parse(kOrdersEndpoint), headers: _headers);
+    _checkStatus(res);
+    return List<Map<String, dynamic>>.from(jsonDecode(res.body));
+  }
+
+  // ── Cotizaciones ───────────────────────────────────────
+
+  static Future<List<Map<String, dynamic>>> getQuotes() async {
+    final res = await http.get(Uri.parse(kQuotesEndpoint), headers: _headers);
+    _checkStatus(res);
+    return List<Map<String, dynamic>>.from(jsonDecode(res.body));
+  }
+
+  // ── FCM token ─────────────────────────────────────────
+
+  static Future<void> registerFcmToken(String token) async {
+    await http.post(
+      Uri.parse(kRegisterToken),
+      headers: _headers,
+      body: jsonEncode({'token': token, 'device_label': 'Safe Car Admin APK'}),
     );
   }
 
-  Widget _buildInput() {
-    return Container(
-      padding: EdgeInsets.only(
-        left: 12, right: 12, top: 10,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 12,
-      ),
-      decoration: BoxDecoration(
-        color: SC.surface,
-        border: Border(top: BorderSide(color: SC.border)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: SC.bg,
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: SC.border),
-              ),
-              child: TextField(
-                controller: _ctrl,
-                style: const TextStyle(color: Colors.white, fontSize: 14),
-                maxLines: null,
-                textInputAction: TextInputAction.send,
-                onSubmitted: (_) => _send(),
-                decoration: InputDecoration(
-                  hintText: 'Escribe al cliente...',
-                  hintStyle: TextStyle(color: SC.white30, fontSize: 13),
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          GestureDetector(
-            onTap: _send,
-            child: Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: SC.orange,
-                shape: BoxShape.circle,
-                boxShadow: [BoxShadow(color: SC.orange.withOpacity(0.4), blurRadius: 10)],
-              ),
-              child: _sending
-                  ? const Padding(padding: EdgeInsets.all(12), child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : const Icon(Icons.send_rounded, color: Colors.white, size: 20),
-            ),
-          ),
-        ],
-      ),
-    );
+  // ── Helper ────────────────────────────────────────────
+
+  static void _checkStatus(http.Response res) {
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw Exception('API error ${res.statusCode}: ${res.body}');
+    }
   }
 }
