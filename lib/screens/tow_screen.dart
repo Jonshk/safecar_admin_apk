@@ -15,6 +15,7 @@ const _towLabels = {
   'pending': 'Pendiente',
   'confirmed': 'Confirmado',
   'in_progress': 'En camino',
+  'arrived': '¡Llegué!',
   'completed': 'Completado',
   'cancelled': 'Cancelado',
 };
@@ -185,6 +186,14 @@ class _TowCard extends StatelessWidget {
                     builder: (_) => ChatScreenAdmin(
                       towId: tow['id'] as int,
                       technicianName: 'Técnico Safe Car',
+                      currentStatus: tow['status'] ?? 'pending',
+                      labelOverrides: _towLabels,
+                      statusOptions: const ['pending','confirmed','in_progress','arrived','completed','cancelled'],
+                      pickupLat: (tow['pickup_lat'] as num?)?.toDouble(),
+                      pickupLng: (tow['pickup_lng'] as num?)?.toDouble(),
+                      techLat: (tow['technician_lat'] as num?)?.toDouble(),
+                      techLng: (tow['technician_lng'] as num?)?.toDouble(),
+                      onStatusChanged: onStatusChanged,
                     ),
                   ),
                 ),
@@ -215,6 +224,7 @@ class _TowCard extends StatelessWidget {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
+      isScrollControlled: true,
       builder: (_) => StatusSelectorSheet(
         currentStatus: tow['status'] ?? 'pending',
         labelOverrides: _towLabels,
@@ -222,21 +232,17 @@ class _TowCard extends StatelessWidget {
           'pending',
           'confirmed',
           'in_progress',
+          'arrived',
           'completed',
           'cancelled'
         ],
         onSelected: (s) async {
           await ApiService.updateTowStatus(tow['id'], s);
-
-          // Arranca el envío de GPS del técnico solo cuando pasa a
-          // "en camino"; lo detiene en cualquier otro estado
-          // (completado, cancelado, o si se retrocede el estado).
-          if (s == 'in_progress') {
+          if (s == 'in_progress' || s == 'arrived') {
             await TechnicianLocationService.instance.start(tow['id'] as int);
           } else if (TechnicianLocationService.instance.activeTowId == tow['id']) {
             await TechnicianLocationService.instance.stop();
           }
-
           onStatusChanged();
         },
       ),
@@ -328,6 +334,14 @@ class _TowCard extends StatelessWidget {
                       builder: (_) => ChatScreenAdmin(
                         towId: tow['id'] as int,
                         technicianName: 'Técnico Safe Car',
+                        currentStatus: tow['status'] ?? 'pending',
+                        labelOverrides: _towLabels,
+                        statusOptions: const ['pending','confirmed','in_progress','arrived','completed','cancelled'],
+                        pickupLat: (tow['pickup_lat'] as num?)?.toDouble(),
+                        pickupLng: (tow['pickup_lng'] as num?)?.toDouble(),
+                        techLat: (tow['technician_lat'] as num?)?.toDouble(),
+                        techLng: (tow['technician_lng'] as num?)?.toDouble(),
+                        onStatusChanged: onStatusChanged,
                       ),
                     ),
                   ),

@@ -83,50 +83,56 @@ class StatusSelectorSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final maxHeight = MediaQuery.of(context).size.height * 0.6;
     return Container(
       decoration: const BoxDecoration(
         color: SC.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
         border: Border(top: BorderSide(color: SC.border)),
       ),
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+      constraints: BoxConstraints(maxHeight: maxHeight),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 36,
-            height: 3,
-            margin: const EdgeInsets.only(bottom: 16),
-            decoration: BoxDecoration(
-              color: SC.border,
-              borderRadius: BorderRadius.circular(2),
+          Center(
+            child: Container(
+              width: 36, height: 3,
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(color: SC.border, borderRadius: BorderRadius.circular(2)),
             ),
           ),
           Text('CAMBIAR ESTADO',
-              style: SC.display(size: 13, color: SC.orange)
-                  .copyWith(letterSpacing: 1.5)),
+              style: SC.display(size: 13, color: SC.orange).copyWith(letterSpacing: 1.5)),
           const SizedBox(height: 14),
-          ...options.map((s) {
-            final label = labelOverrides?[s] ?? (_statusLabels[s] ?? s);
-            final selected = s == currentStatus;
-            return ListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(label,
-                  style: SC.body(
-                    size: 14,
-                    color: selected ? SC.orange : SC.textPrimary,
-                  )),
-              leading: StatusBadge(s, overrideLabel: label),
-              trailing: selected
-                  ? const Icon(Icons.check_rounded, color: SC.orange, size: 18)
-                  : null,
-              onTap: () {
-                Navigator.pop(context);
-                onSelected(s);
-              },
-            );
-          }),
+          Flexible(
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ...options.map((s) {
+                    final label = labelOverrides?[s] ?? (_statusLabels[s] ?? s);
+                    final selected = s == currentStatus;
+                    return ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(label,
+                          style: SC.body(size: 14, color: selected ? SC.orange : SC.textPrimary)),
+                      leading: StatusBadge(s, overrideLabel: label),
+                      trailing: selected
+                          ? const Icon(Icons.check_rounded, color: SC.orange, size: 18)
+                          : null,
+                      onTap: () {
+                        Navigator.pop(context);
+                        onSelected(s);
+                      },
+                    );
+                  }),
+                  const SizedBox(height: 20),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
