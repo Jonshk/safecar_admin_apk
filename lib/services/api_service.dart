@@ -1,10 +1,28 @@
 // lib/services/api_service.dart
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'api_config.dart';
 
 class ApiService {
-  static const _headers = {'Content-Type': 'application/json'};
+  static final session = ValueNotifier<String?>(null);
+  static bool get isAuthenticated => session.value != null;
+  static Map<String, String> get _headers => {
+    'Content-Type': 'application/json',
+    if (session.value != null) 'Authorization': 'Bearer ${session.value}',
+  };
+
+  static Future<void> login(String username, String password) async {
+    final res = await http.post(
+      Uri.parse('$kBaseUrl/auth/login'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'username': username, 'password': password}),
+    ).timeout(const Duration(seconds: 60));
+    _checkStatus(res);
+    final token = jsonDecode(res.body)['access_token'];
+    if (token is! String || token.isEmpty) throw Exception('Respuesta de acceso inválida');
+    session.value = token;
+  }
 
   // ── Grúas ──────────────────────────────────────────────
 
@@ -33,11 +51,12 @@ class ApiService {
   static Future<void> updateTechnicianLocation(
       int towId, double lat, double lng) async {
     try {
-      await http.patch(
+      final res = await http.patch(
         Uri.parse('$kTowEndpoint/$towId/location'),
         headers: _headers,
         body: jsonEncode({'technician_lat': lat, 'technician_lng': lng}),
       );
+      _checkStatus(res);
     } catch (_) {
       // Falla silenciosa a propósito: si una actualización de GPS se
       // pierde por mala señal, la siguiente (30s después) la corrige.
@@ -52,6 +71,7 @@ class ApiService {
       final r = await http
           .get(Uri.parse('$kBaseUrl/chat/$towId?after_id=$afterId'), headers: _headers)
           .timeout(const Duration(seconds: 10));
+      _checkStatus(r);
       if (r.statusCode == 200) return List<Map<String, dynamic>>.from(jsonDecode(r.body));
     } catch (_) {}
     return [];
@@ -68,6 +88,7 @@ class ApiService {
           .post(Uri.parse('$kBaseUrl/chat/'), headers: _headers,
               body: jsonEncode({'tow_id': towId, 'sender': sender, 'sender_name': senderName, 'text': text}))
           .timeout(const Duration(seconds: 10));
+      _checkStatus(r);
       return r.statusCode == 201;
     } catch (_) {
       return false;
@@ -113,18 +134,21 @@ class ApiService {
   // ── FCM token ─────────────────────────────────────────
 
   static Future<void> registerFcmToken(String token) async {
-    await http.post(
+    if (!isAuthenticated) return;
+    final res = await http.post(
       Uri.parse(kRegisterToken),
       headers: _headers,
       body: jsonEncode({'token': token, 'device_label': 'Safe Car Admin APK'}),
     );
+    _checkStatus(res);
   }
 
   // ── Helper ────────────────────────────────────────────
 
   static void _checkStatus(http.Response res) {
     if (res.statusCode < 200 || res.statusCode >= 300) {
-      throw Exception('API error ${res.statusCode}: ${res.body}');
+      if (res.statusCode == 401 || res.statusCode == 403) session.value = null;
+      throw Exception('API error ${res.statusCode}');
     }
   }
 }

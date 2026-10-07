@@ -2,7 +2,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../theme/sc_theme.dart';
-import 'main_nav_screen.dart';
+import 'admin_auth_gate.dart';
 
 /// Splash animado de Flutter. Distinto de la pantalla nativa de Android
 /// (launch_background) que se ve ANTES de esto mientras el motor
@@ -47,7 +47,7 @@ class _SplashScreenState extends State<SplashScreen>
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
         transitionDuration: const Duration(milliseconds: 400),
-        pageBuilder: (_, anim, __) => const MainNavScreen(),
+        pageBuilder: (_, anim, __) => const AdminAuthGate(),
         transitionsBuilder: (_, anim, __, child) =>
             FadeTransition(opacity: anim, child: child),
       ),
