@@ -65,7 +65,9 @@ class FcmService {
     });
 
     final token = await _messaging.getToken();
-    if (token != null) await ApiService.registerFcmToken(token);
-    _messaging.onTokenRefresh.listen((t) => ApiService.registerFcmToken(t));
+    if (token != null && ApiService.isAuthenticated) await ApiService.registerFcmToken(token);
+    _messaging.onTokenRefresh.listen((t) {
+      if (ApiService.isAuthenticated) ApiService.registerFcmToken(t);
+    });
   }
 }
